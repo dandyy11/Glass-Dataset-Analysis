@@ -1,0 +1,258 @@
+---
+output:
+  pdf_document:
+    latex_engine: xelatex
+  word_document: default
+editor_options:
+  chunk_output_type: console
+urlcolor: blue
+fontsize: 12pt
+header-includes:
+- \usepackage{caption}
+- \captionsetup[figure]{labelformat=empty}
+--- 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  comment = "#",
+  cache = FALSE,
+  collapse = TRUE,
+  error = TRUE,
+  tidy.opts=list(width.cutoff=65)
+)
+```
+
+# Final Project
+
+## STA 4384, TR 2:00-3:15
+
+### By Anna Ramasamy and Salman Imtiaz 
+### Professor Michael Gallaugher
+
+\newpage
+  
+1. Perform an exploratory analysis on your data (i.e. visualizations, means, covariances, etc.
+
+```{r}
+suppressMessages(suppressWarnings(library(mlbench)))
+suppressMessages(suppressWarnings(library(GGally)))
+suppressMessages(suppressWarnings(library(corrplot)))
+suppressMessages(suppressWarnings(library(mclust)))  
+suppressMessages(suppressWarnings(library(e1071)))
+suppressMessages(suppressWarnings(library(cluster)))
+suppressMessages(suppressWarnings(library(MASS)))
+suppressMessages(suppressWarnings(library(rpart)))
+suppressMessages(suppressWarnings(library(rattle)))
+suppressMessages(suppressWarnings(library(tree)))
+suppressMessages(suppressWarnings(library(randomForest)))
+data(Glass)
+glass2 <- Glass[,c(1,2,3,7,8,9,10)]
+glass2 <- glass2[glass2$Type %in% c(1,2,3,7), ]
+glass2$Type <- droplevels(glass2$Type)
+cov(glass2[-7]) #In this matrix we can see the variables do not tend to covary in a certain direction as there is a roughly equal number of positive and negative values.
+cor(glass2[-7]) #correlations are generally low, except for the ones between RI and Ca at 0.823. There is also a strong negative correlation between Ba and Mg at -0.63. The others are low to moderate. This indicates a relationship where these variables tend to change with each other.
+corrplot(cor(glass2[-7]),method="number")
+colMeans(glass2[glass2$Type==1,1:6]) #Mg is the highest in 1.
+colMeans(glass2[glass2$Type==2,1:6]) #Ca is the highest in 2.
+colMeans(glass2[glass2$Type==3,1:6]) #Ba is the lowest in 3.
+colMeans(glass2[glass2$Type==7,1:6]) #There tends to be a low amount of Mg and high Ba in 7.
+pairs(glass2[,-7])#probably take out
+var(glass2[,-7])#probably take out
+colSds(as.matrix(glass2[,-7])) #Mg and Ca have the highest standard deviations.
+par(mfrow = c(3, 2))
+for (x in 1:6) {
+  hist(glass2[,x]) #ask him if histogram or boxplot is better
+}
+for (x in 1:6) {
+  boxplot(glass2[,x])
+}
+dev.off()
+ggpairs(glass2,aes(col=Type),progress = FALSE) #He said use this instead of histogram and boxplot, bottom right is class distribution
+```
+
+2. Perform a principal component analysis on your data.
+
+```{r}
+glass_pca_R<-princomp(glass2[,-7],cor=T)
+print(summary(glass_pca_R),loadings=T)
+eigenvals <- glass_pca_R$sdev^2
+for (x in 1:6){
+  print(eigenvals[x] / sum(eigenvals))
+}
+glasssum <- 0
+for(x in 1:6){
+    current <- eigenvals[x] / sum(eigenvals)
+    glasssum <- glasssum + current
+    print(glasssum)
+}
+screeplot(glass_pca_R)
+suppressWarnings(suppressMessages((library(factoextra))))
+biplot(glass_pca_R)
+fviz_pca_biplot(glass_pca_R,label ="var")
+```
+
+Loading coefficients closer to 1 or -1 are most influential on the component, therefore all variables are influential as each of them occurs with a coefficient above +/-0.5. We can assume the variables in each component tend to vary together. The first component includes all variables other than Na, and the second and third components include all variables. The fourth component includes all variables other than Ca, and the fifth and sixth components include all variables other than Fe.
+Explained variance ratio for each component (cumulative and individual) are calculated.
+We can see the first principal component accounts for around 34.6% of the total variance, and the first 5 components account for 99.4% of the total variance. To keep 75% of the variance, you would need 3 components, as 3 components account for 82.4% of variance.
+We choose the point in the screeplot where there is an elbow, so it would be appropriate to choose the first two components. This also corresponds to the components accounting for 66.8% of variance.
+The position of each datapoint on the graph indicates how it relates to the first two principal components which are on the x and y axes. Mg, Na, Ba, RI and Ca are seen to have the highest contribution to the first two principal components as they have the longest arrows. Datapoints 107 and 108 may be outliers as they are farthest from the center but more testing would be needed to determine this. Because these datapoints are far from the others, they are negatively correlated whereas closer datapoints are positively correlated. We can see at least 3 distinct clusters from this biplot.
+From the second biplot, we can see Mg, Na, Ba, Ca, and RI have the largest variance as they have the longest vector lines, and Mg has a weakly negative correlation with Ca and RI as the angle between them is a bit over 90 degrees. RI and Ca are highly positively correlated. Ba has no correlation with RI and Ca as it is close to 90 degrees. Ba and Na are positively correlated due to their acute angle, and both are negatively correlated with Mg as the angle approaches 180 degrees, Ba moreso than Na. Since there are only 192 observations, we should be critical about the PCA results.
+
+3. Perform a cluster analysis on the data. Choose two of the three different clustering methods we discussed in class. (i.e. two of k-means/k-medoids, hierarchical, and model-based).
+
+```{r}
+#hierarchical clustering
+diststd <- dist(scale(glass2[,-7]))
+hcstdSL <- hclust(diststd, method="single")
+hcstdCL <- hclust(diststd, method="complete")
+hcstdAL <- hclust(diststd, method="average")
+par(mfrow=c(1,3))
+plot(hcstdSL) #chaining issue
+plot(hcstdCL)
+plot(hcstdAL) 
+table(glass2[,7],cutree(hcstdSL,4)) #all hierarchical is trash. remove.
+table(glass2[,7],cutree(hcstdCL,4))
+table(glass2[,7],cutree(hcstdAL,4))
+classAgreement(table(glass2[,7],cutree(hcstdCL,4)))$crand
+classAgreement(table(glass2[,7],cutree(hcstdAL,4)))$crand
+#k-means
+Xs <- scale(glass2[,-7])
+kmlist.std <- vector("list", 9)
+for(k in 2:10){
+  set.seed(1)
+  kmlist.std[[k-1]] <- kmeans(Xs, k, nstart=5000)
+} 
+tot.withinss <- sapply(kmlist.std, function(x) x$tot.withinss)
+plot(2:10, tot.withinss, type="b", 
+     xlab="# Clusters", ylab="TWCSS", main="Scree Plot: Std. Data")
+par(mfrow=c(1,3)) #where is the elbow? 5?
+for(k in 2:10){
+  plot(silhouette(kmlist.std[[k-1]]$cluster,dist=dist(Xs)))
+} #3-5 clusters is strongest
+match_glass<-matchClasses(table(glass2[,7],kmlist.std[[2]]$cluster))
+tab_glass<-table(glass2[,7],kmlist.std[[2]]$cluster)[,match_glass]
+tab_glass #very disappointing. figure out if fixable or trash.
+#k-medoids
+set.seed(1)
+glass_med<-pam(Xs,k=4,nstart=50)
+glass_kmeans<-kmeans(Xs,centers=4,nstart=50)
+table(glass_med$clustering,glass_kmeans$cluster)
+tab_glass_kmed<-table(glass2$Type,glass_med$clustering)
+tab_glass_kmed #its getting better than kmeans
+tab_glass_kmed2<-tab_glass_kmed[,matchClasses(tab_glass_kmed)]
+tab_glass_kmed2
+classAgreement(tab_glass_kmed)
+tab_glass<-table(glass2$Type,glass_kmeans$cluster)
+tab_glass2<-tab_glass[,matchClasses(tab_glass)]
+tab_glass
+tab_glass2
+classAgreement(tab_glass2)#diagonal element is missed classification rate
+classAgreement(tab_glass)
+#divisive clustering
+DIV_glass<-diana(Xs)
+plot(DIV_glass)
+table(glass2[,7],cutree(DIV_glass,4)) #consider including?
+#model-based clustering
+mod_glass<-Mclust(glass2[,-7],G=2:6)
+summary(mod_glass)
+plot(mod_glass,what=c("BIC","classification")) #only 3 components chosen
+table_glass_mod<-table(glass2$Type,mod_glass$classification)
+classAgreement(table_glass_mod)
+table_glass_mod #forcing 4th component doesn't help.
+#Why might we have underfit the true number of clusters?curse of dimensionality
+```
+
+4. Splitting Data into Training and Testing Sets
+
+```{r}
+#stratification of training and testing sets is recommended for this dataset
+#split into separate matrices for each Type
+sub_1 <- subset(glass2, Type==1) 
+sub_2 <- subset(glass2, Type==2) 
+sub_3 <- subset(glass2, Type==3) 
+sub_7 <- subset(glass2, Type==7) 
+#split into training and testing
+set.seed(1)
+samp_int_1 <- sample.int(n=nrow(sub_1), size=round(0.7*nrow(sub_1)))
+samp_int_2 <- sample.int(n=nrow(sub_2), size=round(0.7*nrow(sub_2)))
+samp_int_3 <- sample.int(n=nrow(sub_3), size=round(0.7*nrow(sub_3)))
+samp_int_7 <- sample.int(n=nrow(sub_7), size=round(0.7*nrow(sub_7)))
+glass_train <- rbind(sub_1[samp_int_1,], sub_2[samp_int_2,], sub_3[samp_int_3,], sub_7[samp_int_7,])
+glass_test <- rbind(sub_1[-samp_int_1,], sub_2[-samp_int_2,], sub_3[-samp_int_3,], sub_7[-samp_int_7,])
+```
+
+5. Perform LDA and QDA on your data and report your findings.
+
+```{r}
+#LDA
+lda_glass <- lda(Type ~ ., data=glass2)
+mu.k <- lda_glass$means
+mu <- colMeans(mu.k)
+dscores <- scale(glass2[,1:6], center=mu, scale=F) %*% lda_glass$scaling
+plot(dscores, xlab="LD1", ylab="LD2", pch=as.integer(glass2$Type), col=as.integer(glass2$Type),
+     main="Discriminant Scores", xlim=c(-5, 10), ylim=c(-5, 7))
+abline(h=0, lty=3)
+abline(v=0, lty=3)
+legend("topright",levels(glass2$Type),pch=1:4,col=1:4,bty="n",cex=0.8)
+plot(lda_glass$scaling, xlab="LD1", ylab="LD2", type="n",
+     main="Discriminant Coefficients", xlim=c(-3, 1), ylim=c(-4, 4))
+text(lda_glass$scaling, labels=rownames(lda_glass$scaling))
+abline(h=0, lty=3)
+abline(v=0, lty=3)
+confusion <- table(glass2$Type, predict(lda_glass)$class)
+confusion #good at 7, decent at 1 and 2 but 3 is worrying
+n <- sum(confusion)
+aper <- (n - sum(diag(confusion))) / n
+aper #34.4% misclassification rate on data previously seen
+glass_CV <- lda(Type ~ ., data=glass2, CV=TRUE) 
+confusionCV <- table(glass2$Type, glass_CV$class)
+confusionCV
+eaer <- (n - sum(diag(confusionCV))) / n
+eaer #40.1% misclassification rate expected check if this is right
+ldatrain <- lda(Type ~ ., data=glass_train)
+confusionTest <- table(glass_test$Type, predict(ldatrain, newdata=glass_test)$class)
+confusionTest
+n <- sum(confusionTest)
+aer <- (n - sum(diag(confusionTest))) / n
+aer #0nly 29% misclassification on testing set
+#QDA
+qda_glass <- qda(Type ~ ., data=glass2)
+confusion <- table(glass2$Type, predict(qda_glass)$class)
+confusion
+n <- sum(confusion)
+aper <- (n - sum(diag(confusion))) / n
+aper #35.4% misclassification rate on data previously seen
+qda_CV <- qda(Type ~ ., data=glass2, CV=TRUE)
+confusionCV <- table(glass2$Type, qda_CV$class)
+confusionCV
+eaer <- (n - sum(diag(confusionCV))) / n
+eaer #42.2%
+qdatrain <- qda(Type ~ ., data=glass_train) #size issue
+confusionTest <- table(glass_test$Type, predict(qdatrain,newdata=glass_test)$class)
+confusionTest
+n <- sum(confusionTest)
+aer <- (n - sum(diag(confusionTest))) / n
+aer
+```
+
+6. Perform a bagging and random forest analysis.
+
+```{r}
+set.seed(1)
+glass_RF_tuneCV<-tune.randomForest(Type~.,data=glass_train,
+                                  mtry=c(1,2,3,4,5,6),ntree=1:20*50,
+                                  tunecontrol =
+                                    tune.control(sampling = "cross",cross=5))
+glass_RF_tuneCV
+glass_CV<-glass_RF_tuneCV$performances
+glass_CV$mtry<-as.factor(glass_CV$mtry)
+ggplot(glass_CV,aes(x=ntree,y=error,group=mtry,col=mtry))+geom_line()
+glass_RF<-randomForest(Type~.,glass_train,ntree=100,mtry=3)
+glass_RF
+glass_RF_predict<-predict(glass_RF,newdata=glass_train)
+table_glass_RF<-table(glass_train$Type,glass_RF_predict)
+table_glass_RF
+1-classAgreement(table_glass_RF)$diag
+classAgreement(table_glass_RF)$crand
+```
+He said include conclusion section.
