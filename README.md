@@ -14,8 +14,7 @@ Glass Dataset: This dataset includes various chemical elements present in differ
 
 ### Repository Structure
 - `Glass_Analysis.Rmd` - R Markdown file containing the complete analysis of the Glass dataset.
-- `Figures/` - Folder containing visualizations such as histograms, scatter plots, PCA biplots, and cluster dendrograms.
-- `README.md` - This file, providing an overview of the analysis and key findings.
+- `Detailed_Report.pdf` - PDF file with the comprehensive report of the analysis.
 
 ### Key Findings
 1. **Correlation Analysis:** Strong positive correlations were observed, such as between Refractive Index (RI) and Calcium (Ca), while strong negative correlations were noted between Magnesium (Mg) and Barium (Ba). These relationships can guide further understanding of glass properties.
